@@ -1,3 +1,4 @@
+import json
 import requests
 from pprint import pprint
 from datetime import datetime
@@ -53,32 +54,62 @@ class VkGetPhotos:
             photo_info_dict_list.append(photo_info_dict)
             names_list.append(photo_name)
             urls_list.append(img_url)
-        with open('file_info.json', 'a') as file:
-            file.write(str(photo_info_dict_list))
+            if i + 1 >= data['response']['count']:
+                break
+        info_dict = {'info': photo_info_dict_list}
+        with open('file_info.json', 'w', encoding='utf-8') as file:
+            json.dump(info_dict, file)
         return urls_list
 
     def get_photos(self):
         URL_METHOD = 'photos.get'
-        album_id = input('Введите id скачиваемого альбома: ')
-        photo_count = int(input('Введите кол-во скачиваемых фотографий: '))
+        self.album_id = input('Введите id скачиваемого альбома: ')
+        self.photo_count = int(input('Введите кол-во скачиваемых фотографий: '))
         params = {
             'owner_id': self._get_user_id(),
-            'album_id': album_id,
-            'count': photo_count,
+            'album_id': self.album_id,
+            'count': self.photo_count,
             'photo_sizes': '1',
             'extended': '1',
             'access_token': VkGetPhotos.TOKEN,
             'v': '5.131'
         }
         res = requests.get(VkGetPhotos.URL + URL_METHOD, params=params).json()
-        urls_list = self._get_photos_info(res, photo_count)
+        pprint(res)
+        urls_list = self._get_photos_info(res, self.photo_count)
+        return urls_list
 
 
-class YaUpload:
+class YaUploader:
+    URL = 'https://cloud-api.yandex.net'
+
     def __init__(self, ya_token):
         self.token = ya_token
 
+    def upload_photos(self, photos_urls_list):
+        headers = {
+            'Content-Type': 'application/json',
+            'Authorization': f'OAuth {self.token}'
+        }
+        requests.put(YaUploader.URL + '/v1/disk/resources', headers=headers,
+                     params={'path': 'VK_Photos_backup_Komarov'})
+        with open('file_info.json', 'r') as file:
+            count = 0
+            data = json.load(file)
+            for url in photos_urls_list:
+                requests.post(YaUploader.URL + '/v1/disk/resources/upload', headers=headers,
+                              params={'path': f'VK_Photos_backup_Komarov/{data["info"][count]["file_name"]}',
+                                      'url': url})
+                count += 1
+
 
 if __name__ == '__main__':
-    a = VkGetPhotos('begemot_korovin')
+    user_id = input('Введите id пользователя: ')
+    # ya_token = input('Введите токен Яндекс Диска: ')
+    a = VkGetPhotos(user_id)
+    # b = YaUploader(ya_token)
+    #
+    # b.upload_photos(a.get_photos())
     a.get_photos()
+
+
