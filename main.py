@@ -75,9 +75,16 @@ class VkGetPhotos:
             'v': '5.131'
         }
         res = requests.get(VkGetPhotos.URL + URL_METHOD, params=params).json()
-        pprint(res)
-        urls_list = self._get_photos_info(res, self.photo_count)
-        return urls_list
+        # pprint(res)
+        if 'error' in res:
+            if res['error']['error_code'] == 30:
+                print('-------')
+                print('Невозможно скачать изображения приватного аккаунта.')
+                self.user_screen_name = input('Пожалуйста введите id открытого аккаунта: ')
+                return self.get_photos()
+        else:
+            urls_list = self._get_photos_info(res, self.photo_count)
+            return urls_list
 
 
 class YaUploader:
@@ -104,9 +111,9 @@ class YaUploader:
 
 
 if __name__ == '__main__':
-    user_id = input('Введите id пользователя: ')
+    vk_user_screen_name = input('Введите id пользователя: ')
     # ya_token = input('Введите токен Яндекс Диска: ')
-    a = VkGetPhotos(user_id)
+    a = VkGetPhotos(vk_user_screen_name)
     # b = YaUploader(ya_token)
     #
     # b.upload_photos(a.get_photos())
