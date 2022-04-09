@@ -141,12 +141,27 @@ class YaUploader:
 
 
 class OdnoklassnikiGetPhotos:
-    URL = 'fb.do'
+    URL = 'https://api.ok.ru/fb.do'
+    SESSION_KEY = 'tkn1MCwOquqkbB21ygA5d2cO88dzwgTYcay76ED02qpGFRZmPmdA358ohjMeeoCsHMvDa'
+    SESSION_SECRET_KEY = 'f56eb5c8470dfecab17a32c08827de10'
+    APP_ID = '512001283091'
+    APP_KEY = 'CEBFJIKGDIHBABABA'
+    APP_SECRET_KEY = '1DAB79C9267191954CC41792'
+
+    def _get_user_albums(self, user_screen_name):
+        params = {
+            'format': 'json',
+            'uids': user_screen_name,
+            'fields': 'accessible, '
+        }
+
+
 
 
 if __name__ == '__main__':
     vk_photos_list = VkGetPhotos()
     ya_photos_uploader = YaUploader()
+    ok_photos_list = OdnoklassnikiGetPhotos()
     social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
     cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
     user_command = social + cloud
