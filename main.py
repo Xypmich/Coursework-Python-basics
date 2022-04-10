@@ -1,5 +1,4 @@
-import json
-import requests
+import json, requests, hashlib
 from pprint import pprint
 from datetime import datetime
 from progress.bar import Bar
@@ -63,6 +62,7 @@ class VkGetPhotos:
         info_dict = {'info': photo_info_dict_list}
         with open('file_info.json', 'w', encoding='utf-8') as file:
             json.dump(info_dict, file)
+
         return urls_list
 
     def get_photos(self, user_screen_name):
@@ -102,6 +102,7 @@ class VkGetPhotos:
         else:
             urls_list = self._get_photos_info(res, self.photo_count)
             ProcessInd.bar.next()
+
             return urls_list
 
 
@@ -137,6 +138,7 @@ class YaUploader:
             final_command = 'another_action'
         else:
             final_command = 'exit'
+
         return final_command
 
 
@@ -146,33 +148,151 @@ class OdnoklassnikiGetPhotos:
     SESSION_SECRET_KEY = 'f56eb5c8470dfecab17a32c08827de10'
     APP_ID = '512001283091'
     APP_KEY = 'CEBFJIKGDIHBABABA'
-    APP_SECRET_KEY = '1DAB79C9267191954CC41792'
 
-    def _get_user_albums(self, user_screen_name):
+    def _get_user_id(self, account_link):
+        METHOD = 'url.getInfo'
         params = {
             'format': 'json',
-            'uids': user_screen_name,
-            'fields': 'accessible, '
+            'method': METHOD,
+            'url': account_link,
+            'application_key': OdnoklassnikiGetPhotos.APP_KEY,
+            'session_key': OdnoklassnikiGetPhotos.SESSION_KEY
         }
+        sig = self._get_md5_sig(params)
+        user_id = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
+
+        return user_id['objectId']
+
+    def _get_user_albums(self, user_id):
+        METHOD = 'photos.getAlbums'
+        params = {
+            'format': 'json',
+            'fid': user_id,
+            'method': METHOD,
+            'application_key': OdnoklassnikiGetPhotos.APP_KEY,
+            'session_key': OdnoklassnikiGetPhotos.SESSION_KEY
+        }
+        sig = self._get_md5_sig(params)
+        photo_albums = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
+        photo_albums_dict = {album['title']: album['aid'] for album in photo_albums['albums']}
+
+        return photo_albums_dict
+
+    def _get_md5_sig(self, params_dict):
+        params_dict_copy = params_dict.copy()
+        [params_dict_copy.pop(key, '') for key in ['access_token']]
+        lexico_params = sorted(params_dict_copy.items())
+        md5_basic = ''
+        for val in lexico_params:
+            md5_basic = f'{md5_basic}{val[0]}={val[1]}'
+        sig = hashlib.md5(f'{md5_basic}{OdnoklassnikiGetPhotos.SESSION_SECRET_KEY}'.encode()).hexdigest()
+        params_dict['sig'] = sig
+
+        return params_dict
+
+    def get_photos(self, user_account_link):
+        photos_id_list = []
+        user_id = str(self._get_user_id(user_account_link))
+        albums_list_dict = self._get_user_albums(user_id)
+        print('-------')
+        print('Доступные альбомы пользователя:')
+        print(*[album_title for album_title in albums_list_dict.keys()], sep='\n')
+        print('Personal - для скачивания личных фото')
+        print('-------')
+        selected_album = input('Выберите нужный альбом: ')
+        while selected_album not in albums_list_dict and selected_album != 'Personal':
+            print('Введено неверное имя альбома!')
+            selected_album = input('Выберите нужный альбом: ')
+        photos_count = input('Введите кол-во загружаемых фотографий: ')
+        if selected_album == 'Personal':
+            METHOD = 'photos.getUserPhotos'
+            params = {
+                'method': METHOD,
+                'format': 'json',
+                'fid': user_id,
+                'count': photos_count,
+                'application_key': OdnoklassnikiGetPhotos.APP_KEY,
+                'session_key': OdnoklassnikiGetPhotos.SESSION_KEY
+            }
+            sig = self._get_md5_sig(params)
+            photos_dict = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
+            n = 0
+            while n in range(len(photos_dict['photos'])):
+                photos_id_list.append(photos_dict['photos'][n]['fid'])
+                n += 1
+            self._get_photos_url_list(photos_id_list, user_id, photos_count)
+        else:
+            album_id = albums_list_dict[selected_album]
+            METHOD = 'photos.getUserAlbumPhotos'
+            params = {
+                'method': METHOD,
+                'format': 'json',
+                'aid': album_id,
+                'count': photos_count,
+                'application_key': OdnoklassnikiGetPhotos.APP_KEY,
+                'session_key': OdnoklassnikiGetPhotos.SESSION_KEY
+            }
+            sig = self._get_md5_sig(params)
+            photos_dict = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
+            n = 0
+            while n in range(len(photos_dict['photos'])):
+                photos_id_list.append(photos_dict['photos'][n]['fid'])
+                n += 1
+            self._get_photos_url_list(photos_id_list, user_id, photos_count, album_id)
+
+    def _get_photos_url_list(self, photos_id_list, user_id, photo_count, album_id=None):
+        METHOD = 'photos.getInfo'
+        if album_id == None:
+            params = {
+                'method': METHOD,
+                'format': 'json',
+                'fid': user_id,
+                'fields': 'photo.PIC640X480, photo.LIKE_COUNT, photo.CREATED_MS',
+                'photo_ids': ','.join(photos_id_list),
+                'application_key': OdnoklassnikiGetPhotos.APP_KEY,
+                'session_key': OdnoklassnikiGetPhotos.SESSION_KEY
+            }
+        else:
+            params = {
+                'method': METHOD,
+                'format': 'json',
+                'fid': user_id,
+                'aid': album_id,
+                'fields': 'photo.PIC640X480, photo.LIKE_COUNT, photo.CREATED_MS',
+                'photo_ids': ','.join(photos_id_list),
+                'application_key': OdnoklassnikiGetPhotos.APP_KEY,
+                'session_key': OdnoklassnikiGetPhotos.SESSION_KEY
+            }
+        sig = self._get_md5_sig(params)
+        photos_info = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
+        photo_info_dict_list = {}
+        for i in range(photo_count):
+            photo_info_dict_list
+        pprint(photos_info)
+
+
+
 
 
 
 
 if __name__ == '__main__':
-    vk_photos_list = VkGetPhotos()
-    ya_photos_uploader = YaUploader()
+    # vk_photos_list = VkGetPhotos()
+    # ya_photos_uploader = YaUploader()
     ok_photos_list = OdnoklassnikiGetPhotos()
-    social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
-    cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
-    user_command = social + cloud
-    while user_command != 'exit':
-        if user_command == 'vkya':
-            vk_user_screen_name = input('Введите id пользователя: ')
-            ya_user_token = input('Введите токен Яндекс Диска: ')
-            user_command = ya_photos_uploader.upload_photos(vk_photos_list.get_photos(vk_user_screen_name),
-                                                            ya_user_token)
-        if user_command == 'another_action':
-            social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
-            cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
-            user_command = social + cloud
-    print('Работа программы завершена.')
+    # social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
+    # cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
+    # user_command = social + cloud
+    # while user_command != 'exit':
+    #     if user_command == 'vkya':
+    #         vk_user_screen_name = input('Введите id пользователя: ')
+    #         ya_user_token = input('Введите токен Яндекс Диска: ')
+    #         user_command = ya_photos_uploader.upload_photos(vk_photos_list.get_photos(vk_user_screen_name),
+    #                                                         ya_user_token)
+    #     if user_command == 'another_action':
+    #         social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
+    #         cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
+    #         user_command = social + cloud
+    # print('Работа программы завершена.')
+    ok_photos_list.get_photos('https://ok.ru/valery.gogua')
+
