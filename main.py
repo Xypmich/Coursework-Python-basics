@@ -31,8 +31,8 @@ class VkGetPhotos:
             likes = str(data['response']['items'][i]['likes']['count'])
             upload_date = datetime.utcfromtimestamp(data['response']['items'][i]['date']).strftime('%d.%m.%Y')
             sizes_list = data['response']['items'][i]['sizes']
-            photo_name = likes + '.jpg'
-            photo_name_2 = likes + '_' + upload_date + '.jpg'
+            photo_name = f'{likes}.jpg'
+            photo_name_2 = f'{likes}_{upload_date}.jpg'
             width_backup = 0
             img_url = None
             size_type = None
@@ -238,9 +238,11 @@ class OdnoklassnikiGetPhotos:
             while n in range(len(photos_dict['photos'])):
                 photos_id_list.append(photos_dict['photos'][n]['fid'])
                 n += 1
-            self._get_photos_url_list(photos_id_list, user_id, photos_count, album_id)
+            url_list = self._get_photos_info(photos_id_list, user_id, photos_count, album_id)
 
-    def _get_photos_url_list(self, photos_id_list, user_id, photo_count, album_id=None):
+            return url_list
+
+    def _get_photos_info(self, photos_id_list, user_id, photo_count, album_id=None):
         METHOD = 'photos.getInfo'
         if album_id == None:
             params = {
@@ -265,34 +267,64 @@ class OdnoklassnikiGetPhotos:
             }
         sig = self._get_md5_sig(params)
         photos_info = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
-        photo_info_dict_list = {}
-        for i in range(photo_count):
-            photo_info_dict_list
-        pprint(photos_info)
+        url_list = self._photo_name_urls(photos_info, photo_count)
 
+        return url_list
 
+    def _photo_name_urls(self, data, photo_count):
+        photo_info_dict_list = []
+        name_list = []
+        url_list = []
+        for i in range(int(photo_count)):
+            likes = data['photos'][i]['like_count']
+            photo_url = data['photos'][i]['pic640x480']
+            upload_date = datetime.utcfromtimestamp(data['photos'][i]['created_ms'] / 1000).strftime('%d.%m.%Y')
+            photo_name = f'{likes}.jpg'
+            photo_name_2 = f'{likes}_{upload_date}.jpg'
+            if photo_name in name_list:
+                photo_info_dict = {
+                    'file_name': photo_name_2,
+                    'size': '640x480'
+                }
+            else:
+                photo_info_dict = {
+                    'file_name': photo_name,
+                    'size': '640x480'
+                }
+            photo_info_dict_list.append(photo_info_dict)
+            name_list.append(photo_name)
+            url_list.append(photo_url)
+            if i + 1 > int(photo_count):
+                break
+            info_dict = {'info': photo_info_dict_list}
+            with open('file_info.json', 'w', encoding='utf-8') as file:
+                json.dump(info_dict, file)
 
-
-
+            return url_list
 
 
 if __name__ == '__main__':
-    # vk_photos_list = VkGetPhotos()
-    # ya_photos_uploader = YaUploader()
+    vk_photos_list = VkGetPhotos()
+    ya_photos_uploader = YaUploader()
     ok_photos_list = OdnoklassnikiGetPhotos()
-    # social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
-    # cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
-    # user_command = social + cloud
-    # while user_command != 'exit':
-    #     if user_command == 'vkya':
-    #         vk_user_screen_name = input('Введите id пользователя: ')
-    #         ya_user_token = input('Введите токен Яндекс Диска: ')
-    #         user_command = ya_photos_uploader.upload_photos(vk_photos_list.get_photos(vk_user_screen_name),
-    #                                                         ya_user_token)
-    #     if user_command == 'another_action':
-    #         social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
-    #         cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
-    #         user_command = social + cloud
-    # print('Работа программы завершена.')
+    social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
+    cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
+    user_command = social + cloud
+    while user_command != 'exit':
+        if user_command == 'vkya':
+            vk_user_screen_name = input('Введите id пользователя: ')
+            ya_user_token = input('Введите токен Яндекс Диска: ')
+            user_command = ya_photos_uploader.upload_photos(vk_photos_list.get_photos(vk_user_screen_name),
+                                                            ya_user_token)
+        elif user_command == 'okya':
+            ok_user_link = input('Введите ссылку на профиль пользователя: ')
+            ya_user_token = input('Введите токен Яндекс Диска: ')
+            user_command = ya_photos_uploader.upload_photos(ok_photos_list.get_photos(ok_user_link),
+                                                            ya_user_token)
+        elif user_command == 'another_action':
+            social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
+            cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
+            user_command = social + cloud
+    print('Работа программы завершена.')
     ok_photos_list.get_photos('https://ok.ru/valery.gogua')
 
