@@ -338,5 +338,3 @@ if __name__ == '__main__':
             social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники): ').lower()
             user_command = social
     print('Работа программы завершена.')
-    ok_photos_list.get_photos('https://ok.ru/valery.gogua')
-
