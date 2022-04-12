@@ -108,15 +108,19 @@ class VkGetPhotos:
 class YaUploader:
     URL = 'https://cloud-api.yandex.net'
 
-    def upload_photos(self, photos_urls_list, ya_token):
+    def upload_photos(self, photos_urls_list, ya_token, social):
         if photos_urls_list == 'exit':
             return photos_urls_list
+        if social == 'vk':
+            DIR = 'VK_Photos_backup_Komarov'
+        elif social == 'ok':
+            DIR = 'OK_Photos_backup_Komarov'
         headers = {
             'Content-Type': 'application/json',
             'Authorization': f'OAuth {ya_token}'
         }
         requests.put(YaUploader.URL + '/v1/disk/resources', headers=headers,
-                     params={'path': 'VK_Photos_backup_Komarov'})
+                     params={'path': DIR})
         print('-------')
         print(f'Загружаю изображения на Яндекс Диск...\n')
         bar = Bar('Выполнение', max=len(photos_urls_list))
@@ -126,7 +130,7 @@ class YaUploader:
             data = json.load(file)
             for url in photos_urls_list:
                 requests.post(YaUploader.URL + '/v1/disk/resources/upload', headers=headers,
-                              params={'path': f'VK_Photos_backup_Komarov/{data["info"][count]["file_name"]}',
+                              params={'path': f'{DIR}/{data["info"][count]["file_name"]}',
                                       'url': url})
                 count += 1
                 bar.next()
@@ -325,11 +329,11 @@ if __name__ == '__main__':
         if user_command == 'vk':
             vk_user_screen_name = input('Введите id пользователя: ')
             user_command = ya_photos_uploader.upload_photos(vk_photos_list.get_photos(vk_user_screen_name),
-                                                            ya_user_token)
+                                                            ya_user_token, social)
         elif user_command == 'ok':
             ok_user_link = input('Введите ссылку на профиль пользователя: ')
             user_command = ya_photos_uploader.upload_photos(ok_photos_list.get_photos(ok_user_link),
-                                                            ya_user_token)
+                                                            ya_user_token, social)
         elif user_command == 'another_action':
             social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники): ').lower()
             user_command = social
