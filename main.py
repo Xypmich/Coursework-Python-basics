@@ -1,11 +1,10 @@
-import json, requests, hashlib
-from pprint import pprint
+import hashlib
+import json
+import requests
+import time
 from datetime import datetime
+
 from progress.bar import Bar
-
-
-class ProcessInd:
-    bar = Bar('Выполнение', max=5)
 
 
 class VkGetPhotos:
@@ -27,6 +26,10 @@ class VkGetPhotos:
         photo_info_dict_list = []
         names_list = []
         urls_list = []
+        print('-------')
+        print(f'Получаю список изображений с vk.com...\n')
+        bar = Bar('Выполнение', max=photo_count)
+        bar.start()
         for i in range(photo_count):
             likes = str(data['response']['items'][i]['likes']['count'])
             upload_date = datetime.utcfromtimestamp(data['response']['items'][i]['date']).strftime('%d.%m.%Y')
@@ -58,7 +61,10 @@ class VkGetPhotos:
             urls_list.append(img_url)
             if i + 1 >= data['response']['count']:
                 break
-        ProcessInd.bar.next()
+            bar.next()
+            time.sleep(0.5)
+        bar.finish()
+        print(f'\nСписок изображений получен.')
         info_dict = {'info': photo_info_dict_list}
         with open('file_info.json', 'w', encoding='utf-8') as file:
             json.dump(info_dict, file)
@@ -67,21 +73,18 @@ class VkGetPhotos:
 
     def get_photos(self, user_screen_name):
         URL_METHOD = 'photos.get'
-        self.album_id = input('Введите id скачиваемого альбома: ')
-        self.photo_count = int(input('Введите кол-во скачиваемых фотографий: '))
-        ProcessInd.bar.start()
-        ProcessInd.bar.next()
+        album_id = input('Введите id скачиваемого альбома: ')
+        photo_count = int(input('Введите кол-во скачиваемых фотографий: '))
         params = {
             'owner_id': self._get_user_id(user_screen_name),
-            'album_id': self.album_id,
-            'count': self.photo_count,
+            'album_id': album_id,
+            'count': photo_count,
             'photo_sizes': '1',
             'extended': '1',
             'access_token': VkGetPhotos.TOKEN,
             'v': '5.131'
         }
         res = requests.get(VkGetPhotos.URL + URL_METHOD, params=params).json()
-        ProcessInd.bar.next()
         if 'error' in res:
             with open('vk_errors.json', 'r', encoding='utf-8') as f:
                 data = json.load(f)['errors'][str(res['error']['error_code'])]
@@ -90,18 +93,14 @@ class VkGetPhotos:
                 print(data[1])
                 if res['error']['error_code'] == 1 or res['error']['error_code'] == 10:
                     stop_word = 'exit'
-                    ProcessInd.bar.finish()
                     return stop_word
             vk_user_screen_name_new = input()
             if vk_user_screen_name_new == 'p_end':
                 stop_word = 'exit'
-                ProcessInd.bar.finish()
                 return stop_word
-            ProcessInd.bar.finish()
             return self.get_photos(vk_user_screen_name_new)
         else:
-            urls_list = self._get_photos_info(res, self.photo_count)
-            ProcessInd.bar.next()
+            urls_list = self._get_photos_info(res, photo_count)
 
             return urls_list
 
@@ -118,18 +117,22 @@ class YaUploader:
         }
         requests.put(YaUploader.URL + '/v1/disk/resources', headers=headers,
                      params={'path': 'VK_Photos_backup_Komarov'})
+        print('-------')
+        print(f'Загружаю изображения на Яндекс Диск...\n')
+        bar = Bar('Выполнение', max=len(photos_urls_list))
+        bar.start()
         with open('file_info.json', 'r', encoding='utf-8') as file:
             count = 0
             data = json.load(file)
-            ProcessInd.bar.next()
             for url in photos_urls_list:
                 requests.post(YaUploader.URL + '/v1/disk/resources/upload', headers=headers,
                               params={'path': f'VK_Photos_backup_Komarov/{data["info"][count]["file_name"]}',
                                       'url': url})
                 count += 1
-        print('-------')
-        print('Фотографии загружены на Яндекс Диск')
-        ProcessInd.bar.finish()
+                bar.next()
+                time.sleep(0.5)
+        bar.finish()
+        print(f'\nФотографии загружены на Яндекс Диск')
         next_command = input('Загрузить другие фото? (yes/no): ').lower()
         while next_command != 'yes' and next_command != 'no':
             print('-------', 'Неизвестная команда!', sep='\n')
@@ -220,7 +223,7 @@ class OdnoklassnikiGetPhotos:
             while n in range(len(photos_dict['photos'])):
                 photos_id_list.append(photos_dict['photos'][n]['fid'])
                 n += 1
-            self._get_photos_url_list(photos_id_list, user_id, photos_count)
+            url_list = self._get_photos_info(photos_id_list, user_id, photos_count)
         else:
             album_id = albums_list_dict[selected_album]
             METHOD = 'photos.getUserAlbumPhotos'
@@ -240,11 +243,11 @@ class OdnoklassnikiGetPhotos:
                 n += 1
             url_list = self._get_photos_info(photos_id_list, user_id, photos_count, album_id)
 
-            return url_list
+        return url_list
 
     def _get_photos_info(self, photos_id_list, user_id, photo_count, album_id=None):
         METHOD = 'photos.getInfo'
-        if album_id == None:
+        if album_id is None:
             params = {
                 'method': METHOD,
                 'format': 'json',
@@ -275,6 +278,10 @@ class OdnoklassnikiGetPhotos:
         photo_info_dict_list = []
         name_list = []
         url_list = []
+        print('-------')
+        print(f'Получаю список изображений с ok.ru...\n')
+        bar = Bar('Выполнение', max=len(photo_count))
+        bar.start()
         for i in range(int(photo_count)):
             likes = data['photos'][i]['like_count']
             photo_url = data['photos'][i]['pic640x480']
@@ -299,32 +306,33 @@ class OdnoklassnikiGetPhotos:
             info_dict = {'info': photo_info_dict_list}
             with open('file_info.json', 'w', encoding='utf-8') as file:
                 json.dump(info_dict, file)
+            bar.next()
+            time.sleep(0.5)
+        bar.finish()
+        print(f'\nСписок изображений получен.')
 
-            return url_list
+        return url_list
 
 
 if __name__ == '__main__':
     vk_photos_list = VkGetPhotos()
     ya_photos_uploader = YaUploader()
     ok_photos_list = OdnoklassnikiGetPhotos()
-    social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
-    cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
-    user_command = social + cloud
+    social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники): ').lower()
+    ya_user_token = input('Введите токен Яндекс Диска: ')
+    user_command = social
     while user_command != 'exit':
-        if user_command == 'vkya':
+        if user_command == 'vk':
             vk_user_screen_name = input('Введите id пользователя: ')
-            ya_user_token = input('Введите токен Яндекс Диска: ')
             user_command = ya_photos_uploader.upload_photos(vk_photos_list.get_photos(vk_user_screen_name),
                                                             ya_user_token)
-        elif user_command == 'okya':
+        elif user_command == 'ok':
             ok_user_link = input('Введите ссылку на профиль пользователя: ')
-            ya_user_token = input('Введите токен Яндекс Диска: ')
             user_command = ya_photos_uploader.upload_photos(ok_photos_list.get_photos(ok_user_link),
                                                             ya_user_token)
         elif user_command == 'another_action':
-            social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники, INST - Инстаграм): ').lower()
-            cloud = input('Введите название облачного хранилища (YA - Яндекс Диск, GD - Google Drive): ').lower()
-            user_command = social + cloud
+            social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники): ').lower()
+            user_command = social
     print('Работа программы завершена.')
     ok_photos_list.get_photos('https://ok.ru/valery.gogua')
 
