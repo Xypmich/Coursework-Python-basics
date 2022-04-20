@@ -9,7 +9,7 @@ from progress.bar import Bar
 
 class VkGetPhotos:
     URL = 'https://api.vk.com/method/'
-    TOKEN = '958eb5d439726565e9333aa30e50e0f937ee432e927f0dbd541c541887d919a7c56f95c04217915c32008'
+    TOKEN = 'a67f00c673c3d4b12800dd0ba29579ec56d804f3c5f3bbcef5328d4b3981fa5987b951cf2c8d8b24b9abd'
 
     def _get_user_id(self, screen_name):
         self.user_screen_name = screen_name
@@ -19,8 +19,23 @@ class VkGetPhotos:
             'access_token': VkGetPhotos.TOKEN,
             'v': '5.131'
         }
-        self.user_id = requests.get(VkGetPhotos.URL + URL_METHOD, params=params).json()['response'][0]['id']
-        return self.user_id
+        self.user_id = requests.get(VkGetPhotos.URL + URL_METHOD, params=params).json()
+        if 'error' in self.user_id:
+            with open('vk_errors.json', 'r', encoding='utf-8') as f:
+                data = json.load(f)['errors'][str(self.user_id['error']['error_code'])]
+                print('-------')
+                print(data[0])
+                print(data[1])
+                if self.user_id['error']['error_code'] == 1 or self.user_id['error']['error_code'] == 10:
+                    stop_word = 'exit'
+                    return stop_word
+            vk_user_screen_name_new = input()
+            if vk_user_screen_name_new == 'p_end':
+                stop_word = 'exit'
+                return stop_word
+            return self.get_photos(vk_user_screen_name_new)
+        else:
+            return self.user_id['response'][0]['id']
 
     def _get_photos_info(self, data, photo_count):
         photo_info_dict_list = []
@@ -119,8 +134,15 @@ class YaUploader:
             'Content-Type': 'application/json',
             'Authorization': f'OAuth {ya_token}'
         }
-        requests.put(YaUploader.URL + '/v1/disk/resources', headers=headers,
+        dir_resp = requests.put(YaUploader.URL + '/v1/disk/resources', headers=headers,
                      params={'path': DIR})
+        if dir_resp.json()['error']:
+            print('-------')
+            print('Ошибка при создании папки на Яндекс Диске!')
+            print(f'Ошибка: {dir_resp.json()["error"]}\nОписание ошибки: {dir_resp.json()["description"]}')
+            print('Работа программы завершена.')
+            stop_word = 'exit'
+            return stop_word
         print('-------')
         print(f'Загружаю изображения на Яндекс Диск...\n')
         bar = Bar('Выполнение', max=len(photos_urls_list))
@@ -129,9 +151,16 @@ class YaUploader:
             count = 0
             data = json.load(file)
             for url in photos_urls_list:
-                requests.post(YaUploader.URL + '/v1/disk/resources/upload', headers=headers,
+                photo_upload_resp = requests.post(YaUploader.URL + '/v1/disk/resources/upload', headers=headers,
                               params={'path': f'{DIR}/{data["info"][count]["file_name"]}',
                                       'url': url})
+                if photo_upload_resp.json()['error']:
+                    print('-------')
+                    print('Ошибка при загрузке изображения на Яндекс Диск!')
+                    print(f'Ошибка: {dir_resp.json()["error"]}\nОписание ошибки: {dir_resp.json()["description"]}')
+                    print('Работа программы завершена.')
+                    stop_word = 'exit'
+                    return stop_word
                 count += 1
                 bar.next()
                 time.sleep(0.5)
@@ -167,6 +196,10 @@ class OdnoklassnikiGetPhotos:
         }
         sig = self._get_md5_sig(params)
         user_id = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
+        if user_id['error_code']:
+            print('-------')
+            print('Ошибка при получении id пользователя!')
+            return self.error_finder(user_id)
 
         return user_id['objectId']
 
@@ -181,6 +214,10 @@ class OdnoklassnikiGetPhotos:
         }
         sig = self._get_md5_sig(params)
         photo_albums = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
+        if photo_albums['error_code']:
+            print('-------')
+            print('Ошибка при получении списка альбомов пользователя!')
+            return self.error_finder(photo_albums)
         photo_albums_dict = {album['title']: album['aid'] for album in photo_albums['albums']}
 
         return photo_albums_dict
@@ -223,6 +260,10 @@ class OdnoklassnikiGetPhotos:
             }
             sig = self._get_md5_sig(params)
             photos_dict = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
+            if photos_dict['error_code']:
+                print('-------')
+                print('Ошибка при получении списка изображений альбома пользователя!')
+                return self.error_finder(photos_dict)
             n = 0
             while n in range(len(photos_dict['photos'])):
                 photos_id_list.append(photos_dict['photos'][n]['fid'])
@@ -241,6 +282,10 @@ class OdnoklassnikiGetPhotos:
             }
             sig = self._get_md5_sig(params)
             photos_dict = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
+            if photos_dict['error_code']:
+                print('-------')
+                print('Ошибка при получении списка изображений альбома пользователя!')
+                return self.error_finder(photos_dict)
             n = 0
             while n in range(len(photos_dict['photos'])):
                 photos_id_list.append(photos_dict['photos'][n]['fid'])
@@ -274,6 +319,10 @@ class OdnoklassnikiGetPhotos:
             }
         sig = self._get_md5_sig(params)
         photos_info = requests.get(OdnoklassnikiGetPhotos.URL, params=sig).json()
+        if photos_info['error_code']:
+            print('-------')
+            print('Ошибка при получении информации о фото пользователя!')
+            return self.error_finder(photos_info)
         url_list = self._photo_name_urls(photos_info, photo_count)
 
         return url_list
@@ -317,14 +366,25 @@ class OdnoklassnikiGetPhotos:
 
         return url_list
 
+    def error_finder(self, response):
+        if response['error_code'] == 100:
+            with open('ok_errors.json', 'r', encoding='utf-8') as file:
+                with open('ok_errors_100_ext.json', 'r', encoding='utf-8') as f:
+                    error_ = json.load(file)
+                    error_ext = json.load(f)
+                    print(f'Ошибка: {error_[response["error_code"]]}\n'
+                          f'Описание ошибки: {error_ext[response["error_data"]]}')
+        else:
+            with open('ok_errors.json', 'r', encoding='utf-8') as file:
+                error_ = json.load(file)
+                print(f'Ошибка: {error_[response["error_code"]]}')
+        print('Работа программы завершена.')
+        stop_word = 'exit'
 
-if __name__ == '__main__':
-    vk_photos_list = VkGetPhotos()
-    ya_photos_uploader = YaUploader()
-    ok_photos_list = OdnoklassnikiGetPhotos()
-    social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники): ').lower()
-    ya_user_token = input('Введите токен Яндекс Диска: ')
-    user_command = social
+        return stop_word
+
+
+def run_uploader(user_command, social, ya_user_token):
     while user_command != 'exit':
         if user_command == 'vk':
             vk_user_screen_name = input('Введите id пользователя: ')
@@ -338,3 +398,14 @@ if __name__ == '__main__':
             social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники): ').lower()
             user_command = social
     print('Работа программы завершена.')
+
+
+if __name__ == '__main__':
+    vk_photos_list = VkGetPhotos()
+    ya_photos_uploader = YaUploader()
+    ok_photos_list = OdnoklassnikiGetPhotos()
+    social = input('Введите название соцсети (VK - Вконтакте, OK - Одноклассники): ').lower()
+    ya_user_token = input('Введите токен Яндекс Диска: ')
+    user_command = social
+
+    run_uploader(user_command, social, ya_user_token)
